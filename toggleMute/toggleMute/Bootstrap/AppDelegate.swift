@@ -11,16 +11,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
     private lazy var preferences = Preferences()
-    private lazy var settingsController = SettingsController()
-    private lazy var mainController = MainController()
-    private lazy var touchBarController = TouchBarController.instantiate(with: settingsController)
+    lazy var muteController = MuteController()
+    let repoUrl = URL(string: "https://github.com/satrik/toggleMute")!
     let popoverView = NSPopover()
     var eventMonitor: EventMonitor?
-    var eventMonitor2: EventMonitor?
     var refreshTimer: Timer?
-    let defaults = UserDefaults.standard
-    let imageUnmute = NSImage(named: NSImage.touchBarAudioInputTemplateName)
-    let imageMute = NSImage(named: NSImage.touchBarAudioInputMuteTemplateName)
+    var updateCheckTimer: Timer?
+
+    // Tracks whether the last poll saw input volume near zero — used by
+    // runTimedCode() to detect a volume recovery (see there for why).
+    private var lastPolledVolumeWasNearZero: Bool?
 
     
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
@@ -38,7 +38,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // "com.apple.UNNotificationDismissActionIdentifier"
         
         if (response.actionIdentifier == "showUpdate" && response.notification.request.content.categoryIdentifier == "updateAvailable") {
-            if NSWorkspace.shared.open(mainController.repoUrl) {}
+            if let url = URL(string: "https://github.com/satrik/toggleMute/releases/latest") {
+                NSWorkspace.shared.open(url)
+            }
         }
         
         completionHandler()
@@ -48,50 +50,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         
-        imageUnmute?.size.height = 18.0
-        imageUnmute?.size.width = 15.0
-        imageMute?.size.height = 18.0
-        imageMute?.size.width = 15.0
         LaunchAtLogin.migrateIfNeeded()
         
         refreshTimer = Timer.scheduledTimer(timeInterval: 1, target: self, selector: #selector(runTimedCode), userInfo: nil, repeats: true)
         
         UNUserNotificationCenter.current().delegate = self
-        
-        let current = UNUserNotificationCenter.current()
-        
-        current.getNotificationSettings(completionHandler: { (settings) in
-        
-            if settings.authorizationStatus == .notDetermined {
-            
-                // notifications not granted yet, asking user
-                current.requestAuthorization(options: [.alert, .sound]){ (granted, error) in
-                
-                    guard error == nil && granted else {
-                        // user denied permissions or an error occured
-                        return
-                    }
-                    // user granted permissions
-                    self.checkForUpdates()
-                }
-                
-            } else if settings.authorizationStatus == .denied {
-                // notification permission was previously denied
-                // could show a hint inside the popover now
-            } else if settings.authorizationStatus == .authorized {
-                // notification permission was already granted
-                self.checkForUpdates()
-            }
-            
-        })
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+
+        // Checks at launch (if due) and re-evaluates hourly so a long-running
+        // session still gets checked at least once a day — see
+        // performUpdateCheckIfDue() for the actual 24h gating.
+        performUpdateCheckIfDue()
+        updateCheckTimer = Timer.scheduledTimer(timeInterval: 3600, target: self, selector: #selector(performUpdateCheckIfDue), userInfo: nil, repeats: true)
         
         if let button = self.statusItem.button {
             
-            button.image = touchBarController.imageUnmute?.tint(color: .selectedMenuItemTextColor)
+            button.image = muteController.imageUnmute?.tint(color: .selectedMenuItemTextColor)
             button.imageScaling = .scaleProportionallyDown
             button.target = self
             button.action = #selector(statusBarButtonClicked)
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.sendAction(on: [.leftMouseDown, .leftMouseUp, .rightMouseUp])
+
+            // Enable a backing layer once so the optional red background
+            // (see MuteController/MainController) can have rounded
+            // corners instead of a hard-edged rectangle, matching the pill
+            // shape macOS uses elsewhere in the menu bar.
+            button.wantsLayer = true
+            button.layer?.cornerRadius = 5
+            button.layer?.masksToBounds = true
 
         }
         
@@ -108,73 +94,96 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
           
         }
         
-        eventMonitor2 = EventMonitor(mask: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-          
-            if let strongSelf = self, (strongSelf.popoverView.isShown) {
-                strongSelf.mainController.popoverSettingsView.close()
-                strongSelf.eventMonitor2?.stop()
-                
-                strongSelf.popoverView.close()
-                strongSelf.eventMonitor?.stop()
-            }
-          
-        }
-        
-        touchBarController.configureUI()
+        muteController.configureUI()
         
         KeyboardShortcuts.onKeyDown(for: .toggleMuteShortcut) {
-            self.touchBarController.toggleMuteState()
-            print("start")
+            if self.preferences.pushToTalkEnabled {
+                // Press: go live only while the key is held down. holdHUD
+                // keeps the HUD on screen for as long as the key is held.
+                self.muteController.toggleMuteStateHard(setMute: false, holdHUD: true)
+            } else {
+                self.muteController.toggleMuteState()
+            }
         }
         
         KeyboardShortcuts.onKeyUp(for: .toggleMuteShortcut) {
-            print("stop")
+            if self.preferences.pushToTalkEnabled {
+                // Release: mute again immediately.
+                self.muteController.toggleMuteStateHard(setMute: true)
+            }
         }
         
+    }
+    
+    
+    // Runs the actual check only if it's never run before, or it's been at
+    // least a day since the last one — called at launch and then every hour
+    // to re-evaluate, which (unlike a bare 24h timer) keeps working
+    // correctly across sleep/wake since it's based on a stored timestamp
+    // rather than elapsed timer ticks.
+    @objc func performUpdateCheckIfDue() {
+
+        let dayInSeconds: TimeInterval = 24 * 60 * 60
+        let lastCheck = UserDefaults.standard.object(forKey: "lastUpdateCheckDate") as? Date
+
+        if lastCheck == nil || Date().timeIntervalSince(lastCheck!) >= dayInSeconds {
+            checkForUpdates()
+        }
+
     }
     
     
     func checkForUpdates() {
-        
-        let getlocalVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        let stringLocalVersion = getlocalVersion! as NSString
-        defaults.set(stringLocalVersion, forKey: "stringLocalVersion")
-        let localVersion = stringLocalVersion.doubleValue
-        
-        let url = URL(string: "https://raw.githubusercontent.com/satrik/toggleMute/main/toggleMute/toggleMute.xcodeproj/project.pbxproj")!
+
+        guard let localVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
+            return
+        }
+
+        guard let url = URL(string: "https://api.github.com/repos/satrik/toggleMute/releases/latest") else {
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+
         let configuration = URLSessionConfiguration.ephemeral
         let session = URLSession(configuration: configuration)
-        let task = session.dataTask(with: url) {(data, response, error) in
-            guard let data = data, error == nil else { return }
-            let getString = String(data: data, encoding: .utf8)!
-            
-            let firstIndex = "MARKETING_VERSION = "
-            let secondIndex = ";"
-            let stringVersion = getString.slice(from: firstIndex, to: secondIndex)
-            let githubVersion = Double(stringVersion!)!
+        let task = session.dataTask(with: request) { (data, response, error) in
 
-            if githubVersion > localVersion {
-                self.sendNotification()
+            guard let data = data, error == nil,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let tagName = json["tag_name"] as? String else { return }
+
+            // Only mark "checked" once we actually got a usable response, so
+            // a transient network hiccup doesn't push the next attempt out
+            // by a full day.
+            UserDefaults.standard.set(Date(), forKey: "lastUpdateCheckDate")
+
+            let githubVersion = tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
+
+            if githubVersion.isNewerVersion(than: localVersion) {
+                DispatchQueue.main.async {
+                    self.sendNotification()
+                }
             }
-            
+
         }
-        
+
         task.resume()
-        
+
     }
     
     
     func sendNotification() {
-        
-        let checkInstallMethod = try? safeShell("brew list togglemute > /dev/null")
-        
-        var msgBody = "Just download the latest release"
-        let btnTitle = "Go to github"
-        
-        if (checkInstallMethod == "") {
-            msgBody = "Just run \"brew update && brew upgrade togglemute\" in your terminal to update"
-        }
-        
+
+        // Homebrew-cask installs live under a "Caskroom" path — point those
+        // users at `brew upgrade` instead of a manual download.
+        let installedViaBrew = Bundle.main.bundlePath.contains("/Caskroom/")
+
+        let msgBody = installedViaBrew
+            ? "Run \"brew update && brew upgrade togglemute\" in your terminal to update"
+            : "A new version is available on GitHub — click to view the release"
+
         let content = UNMutableNotificationContent()
         content.title = "toggleMute update available 🚀"
         content.body = msgBody
@@ -183,12 +192,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         let uuidString = UUID().uuidString
         let trigger = UNTimeIntervalNotificationTrigger.init(timeInterval: 3.0, repeats: false)
-        let showUpdate = UNNotificationAction(identifier: "showUpdate", title: btnTitle, options: .foreground)
+        let showUpdate = UNNotificationAction(identifier: "showUpdate", title: "Go to GitHub", options: .foreground)
         let category = UNNotificationCategory(identifier: "updateAvailable", actions: [showUpdate], intentIdentifiers: [], options: .customDismissAction)
         let notificationCenter = UNUserNotificationCenter.current()
         
         notificationCenter.setNotificationCategories([category])
-        notificationCenter.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         
         let request = UNNotificationRequest(identifier: uuidString, content: content, trigger: trigger)
         notificationCenter.add(request)
@@ -198,39 +206,75 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     @objc func runTimedCode(){
 
-        mainController.getCurrentVolume()
-                
-        if(defaults.integer(forKey: "currentSetVolume") < 5) {
-            touchBarController.toggleMuteStateHard(setMute: true)
+        // Sync UI to the actual device state so the icon reflects external mute
+        // changes (e.g. from the system menu). Reads the real CoreAudio mute
+        // property — falls back to "volume == 0" only when no mute property is
+        // exposed. If we can't tell, leave the UI alone instead of flipping it.
+        guard let muted = AudioInputController.isMuted() else { return }
+
+        // Some hardware (many Bluetooth/USB headsets, e.g. Jabra) only has a
+        // mute BUTTON that drives input volume — it never touches CoreAudio's
+        // mute property at all. When we detect that kind of external mute
+        // (via the volume-near-zero fallback in AudioInputController), we
+        // also write the real mute property so Audio MIDI Setup reflects it
+        // correctly. But since the hardware itself never clears that
+        // property again, a second press that raises the volume back up
+        // still reads back mutePropertyResult == true, and AudioInputController
+        // trusts the property over volume — so the app stays stuck "muted".
+        // A volume recovery (near-zero -> clearly non-zero) while we're
+        // currently muted is an unambiguous "the hardware just unmuted"
+        // signal, so it overrides a stuck property and forces a proper
+        // unmute (which clears the property too).
+        let volumeIsNearZero = (AudioInputController.volume() ?? 1) < 0.05
+        let volumeJustRecovered = lastPolledVolumeWasNearZero == true && !volumeIsNearZero
+        lastPolledVolumeWasNearZero = volumeIsNearZero
+
+        if volumeJustRecovered && muteController.isMuted {
+            muteController.toggleMuteStateHard(setMute: false)
         } else {
-            touchBarController.toggleMuteStateHard(setMute: false)
+            muteController.toggleMuteStateHard(setMute: muted)
         }
 
     }
     
     
     @objc func statusBarButtonClicked(sender: NSStatusBarButton) {
-        
-        let event = NSApp.currentEvent!
-        
-        if event.type == NSEvent.EventType.rightMouseUp {
+
+        switch NSApp.currentEvent?.type {
+
+        case .rightMouseUp:
             showMainController()
-        } else {
-            touchBarController.toggleMuteState()
+
+        case .leftMouseDown:
+            if preferences.pushToTalkEnabled {
+                // Press: go live only while the icon is held down. holdHUD
+                // keeps the HUD on screen for as long as it's held.
+                muteController.toggleMuteStateHard(setMute: false, holdHUD: true)
+            }
+
+        case .leftMouseUp:
+            if preferences.pushToTalkEnabled {
+                // Release: mute again immediately.
+                muteController.toggleMuteStateHard(setMute: true)
+            } else {
+                muteController.toggleMuteState()
+            }
+
+        default:
+            break
+
         }
     }
     
     
     @objc private func showMainController() {
         
-        let mainController = MainController.instantiate(with: settingsController, and: preferences)
+        let mainController = MainController.instantiate(with: preferences)
         popoverView.contentViewController = mainController
 
         guard let button = statusItem.button else {
             fatalError("Couldn't find status item button.")
         }
-        
-        print(popoverView.isShown)
         
         if(popoverView.isShown) {
             
@@ -248,48 +292,40 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
     }
-    
-    
-    // Add to suppress warnings when you don't want/need a result
-    @discardableResult
-    func safeShell(_ command: String) throws -> String {
-        
-        let task = Process()
-        let pipe = Pipe()
-        
-        task.standardOutput = pipe
-        task.standardError = pipe
-        task.arguments = ["--login", "-c", command]
-        task.executableURL = URL(fileURLWithPath: "/bin/bash")
-        task.standardInput = nil
 
-        try task.run()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)!
-        
-        return output
-        
-    }
-
-    
-}
-
-
-func isKeyPresentInUserDefaults(key: String) -> Bool {
-    
-    return UserDefaults.standard.object(forKey: key) != nil
     
 }
 
 
 extension String {
-    
-    func slice(from: String, to: String) -> String? {
-        return (range(of: from)?.upperBound).flatMap { substringFrom in
-            (range(of: to, range: substringFrom..<endIndex)?.lowerBound).map { substringTo in
-                String(self[substringFrom..<substringTo])
+
+    /// Component-wise numeric version comparison (e.g. "1.10.0" is newer
+    /// than "1.9.0" — a plain string or Double comparison would get that
+    /// wrong). Each dot-separated component is read as its leading run of
+    /// digits, so "7b" contributes 7 and non-numeric suffixes are ignored;
+    /// for fully reliable comparisons, GitHub release tags should stick to
+    /// plain "X.Y.Z" numbers.
+    func isNewerVersion(than other: String) -> Bool {
+
+        func components(_ version: String) -> [Int] {
+            version.split(separator: ".").map { part -> Int in
+                let digits = part.prefix(while: { $0.isNumber })
+                return Int(digits) ?? 0
             }
         }
+
+        let mine = components(self)
+        let theirs = components(other)
+        let count = max(mine.count, theirs.count)
+
+        for i in 0..<count {
+            let a = i < mine.count ? mine[i] : 0
+            let b = i < theirs.count ? theirs[i] : 0
+            if a != b { return a > b }
+        }
+
+        return false
+
     }
+
 }

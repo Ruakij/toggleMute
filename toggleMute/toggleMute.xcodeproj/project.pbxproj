@@ -12,13 +12,12 @@
 		449F396C2317247C008A0DBD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 449F396B2317247C008A0DBD /* Assets.xcassets */; };
 		449F397C23172ADC008A0DBD /* Controllers.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 449F397B23172ADC008A0DBD /* Controllers.storyboard */; };
 		449F398323173003008A0DBD /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449F398223173003008A0DBD /* Preferences.swift */; };
-		449F398D23173610008A0DBD /* SettingsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449F398C23173610008A0DBD /* SettingsController.swift */; };
-		44D551E02390830E0065505A /* SharedFileList.m in Sources */ = {isa = PBXBuildFile; fileRef = 44D551DE2390830E0065505A /* SharedFileList.m */; };
-		44EB8BD923AC2ABD005A4A0B /* TouchBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44EB8BD723AC2ABD005A4A0B /* TouchBarController.swift */; };
-		44EB8BDD23AC350D005A4A0B /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44EB8BDB23AC350D005A4A0B /* SettingsViewController.swift */; };
+		44EB8BD923AC2ABD005A4A0B /* MuteController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44EB8BD723AC2ABD005A4A0B /* MuteController.swift */; };
+		AEAFCF27A52D05DDC0561C8B /* HUDController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76F8C673A42A189D25A17999 /* HUDController.swift */; };
 		BD391AE9263C3F5600848049 /* LaunchAtLogin in Frameworks */ = {isa = PBXBuildFile; productRef = BD391AE8263C3F5600848049 /* LaunchAtLogin */; };
 		C3C528C02DF0162800BBC393 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = C3C528BF2DF0162800BBC393 /* KeyboardShortcuts */; };
 		C3DA000A2B88C00900B6BCCA /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DA00092B88C00900B6BCCA /* EventMonitor.swift */; };
+		D9A1F4022E0099AA00112233 /* AudioInputController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A1F4012E0099AA00112233 /* AudioInputController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -43,14 +42,10 @@
 		449F39712317247C008A0DBD /* SettingsController.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SettingsController.entitlements; sourceTree = "<group>"; };
 		449F397B23172ADC008A0DBD /* Controllers.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = Controllers.storyboard; sourceTree = "<group>"; };
 		449F398223173003008A0DBD /* Preferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
-		449F398C23173610008A0DBD /* SettingsController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SettingsController.swift; sourceTree = "<group>"; };
-		44D551DD2390830E0065505A /* SettingsController-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SettingsController-Bridging-Header.h"; sourceTree = "<group>"; };
-		44D551DE2390830E0065505A /* SharedFileList.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SharedFileList.m; sourceTree = "<group>"; };
-		44D551DF2390830E0065505A /* SharedFileList.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SharedFileList.h; sourceTree = "<group>"; };
-		44EB8BD623AC28E3005A4A0B /* NSTouchBar-Private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSTouchBar-Private.h"; sourceTree = "<group>"; };
-		44EB8BD723AC2ABD005A4A0B /* TouchBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchBarController.swift; sourceTree = "<group>"; };
-		44EB8BDB23AC350D005A4A0B /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
+		44EB8BD723AC2ABD005A4A0B /* MuteController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuteController.swift; sourceTree = "<group>"; };
+		76F8C673A42A189D25A17999 /* HUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDController.swift; sourceTree = "<group>"; };
 		C3DA00092B88C00900B6BCCA /* EventMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventMonitor.swift; sourceTree = "<group>"; };
+		D9A1F4012E0099AA00112233 /* AudioInputController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioInputController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,10 +64,9 @@
 		447B1DF7236795C100587E3A /* Controllers */ = {
 			isa = PBXGroup;
 			children = (
-				449F398C23173610008A0DBD /* SettingsController.swift */,
 				447B1DF8236795F100587E3A /* MainController.swift */,
-				44EB8BDB23AC350D005A4A0B /* SettingsViewController.swift */,
-				44EB8BD723AC2ABD005A4A0B /* TouchBarController.swift */,
+				44EB8BD723AC2ABD005A4A0B /* MuteController.swift */,
+				76F8C673A42A189D25A17999 /* HUDController.swift */,
 			);
 			path = Controllers;
 			sourceTree = "<group>";
@@ -81,7 +75,6 @@
 			isa = PBXGroup;
 			children = (
 				449F39682317247B008A0DBD /* toggleMute */,
-				C3C528BE2DF0162800BBC393 /* Frameworks */,
 				449F39672317247B008A0DBD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -127,11 +120,8 @@
 		44D551D923907B7F0065505A /* Support */ = {
 			isa = PBXGroup;
 			children = (
-				44D551DF2390830E0065505A /* SharedFileList.h */,
-				44D551DE2390830E0065505A /* SharedFileList.m */,
 				449F398223173003008A0DBD /* Preferences.swift */,
-				44D551DD2390830E0065505A /* SettingsController-Bridging-Header.h */,
-				44EB8BD623AC28E3005A4A0B /* NSTouchBar-Private.h */,
+				D9A1F4012E0099AA00112233 /* AudioInputController.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -151,13 +141,6 @@
 				449F397B23172ADC008A0DBD /* Controllers.storyboard */,
 			);
 			path = Storyboard;
-			sourceTree = "<group>";
-		};
-		C3C528BE2DF0162800BBC393 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -267,13 +250,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				447B1DF9236795F100587E3A /* MainController.swift in Sources */,
-				44EB8BD923AC2ABD005A4A0B /* TouchBarController.swift in Sources */,
-				44EB8BDD23AC350D005A4A0B /* SettingsViewController.swift in Sources */,
-				44D551E02390830E0065505A /* SharedFileList.m in Sources */,
+				44EB8BD923AC2ABD005A4A0B /* MuteController.swift in Sources */,
+				AEAFCF27A52D05DDC0561C8B /* HUDController.swift in Sources */,
 				449F396A2317247B008A0DBD /* AppDelegate.swift in Sources */,
-				449F398D23173610008A0DBD /* SettingsController.swift in Sources */,
 				449F398323173003008A0DBD /* Preferences.swift in Sources */,
 				C3DA000A2B88C00900B6BCCA /* EventMonitor.swift in Sources */,
+				D9A1F4022E0099AA00112233 /* AudioInputController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -418,10 +400,6 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					/System/Library/PrivateFrameworks,
-				);
 				INFOPLIST_FILE = "$(SRCROOT)/toggleMute/Resources/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = toggleMute;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -429,15 +407,10 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				MARKETING_VERSION = 1.6;
-				OTHER_LDFLAGS = (
-					"-framework",
-					DFRFoundation,
-				);
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.toggleMute;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "toggleMute/Support/SettingsController-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
@@ -458,10 +431,6 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					/System/Library/PrivateFrameworks,
-				);
 				INFOPLIST_FILE = "$(SRCROOT)/toggleMute/Resources/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = toggleMute;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -469,15 +438,10 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				MARKETING_VERSION = 1.6;
-				OTHER_LDFLAGS = (
-					"-framework",
-					DFRFoundation,
-				);
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.toggleMute;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "toggleMute/Support/SettingsController-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

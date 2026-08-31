@@ -1,4 +1,5 @@
 import Foundation
+import LaunchAtLogin
 
 struct Preferences {
 
@@ -10,7 +11,15 @@ struct Preferences {
         NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
     }
 
-    var randomNootNootEnabled: Bool {
+    var launchAtLoginEnabled: Bool {
+        get { LaunchAtLogin.isEnabled }
+        set {
+            LaunchAtLogin.isEnabled = newValue
+            didChange()
+        }
+    }
+
+    var pushToTalkEnabled: Bool {
         get { defaults.bool(forKey: #function) }
         set {
             defaults.set(newValue, forKey: #function)
@@ -18,22 +27,43 @@ struct Preferences {
         }
     }
 
-    private var appURL: URL { Bundle.main.bundleURL }
-    
-    var launchAtLoginEnabled: Bool {
-        get { SharedFileList.sessionLoginItems().containsItem(appURL) }
+    var hudEnabled: Bool {
+        get { defaults.bool(forKey: #function) }
         set {
-            if newValue {
-                SharedFileList.sessionLoginItems().addItem(appURL)
-            } else {
-                SharedFileList.sessionLoginItems().removeItem(appURL)
-            }
-
+            defaults.set(newValue, forKey: #function)
             didChange()
         }
     }
-}
 
-enum PreferencesKey: String {
-    case launchAtLogin
+    var hudAlwaysVisible: Bool {
+        get { defaults.bool(forKey: #function) }
+        set {
+            defaults.set(newValue, forKey: #function)
+            didChange()
+        }
+    }
+
+    var hudRedIconEnabled: Bool {
+        get { defaults.bool(forKey: #function) }
+        set {
+            defaults.set(newValue, forKey: #function)
+            didChange()
+        }
+    }
+
+    var muteInputVolumeEnabled: Bool {
+        get { defaults.bool(forKey: #function) }
+        set {
+            defaults.set(newValue, forKey: #function)
+            didChange()
+        }
+    }
+
+    var soundsEnabled: Bool {
+        get { defaults.bool(forKey: #function) }
+        set {
+            defaults.set(newValue, forKey: #function)
+            didChange()
+        }
+    }
 }

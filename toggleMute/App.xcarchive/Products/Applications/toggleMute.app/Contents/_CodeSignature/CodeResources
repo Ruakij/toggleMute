@@ -10,35 +10,27 @@
 		</data>
 		<key>Resources/Assets.car</key>
 		<data>
-		HJroG5PPpfq2RS4VXlB8cs3Rsv0=
+		R+xayDSkl7SdJwbAIYAj4jtOOxg=
 		</data>
 		<key>Resources/Controllers.storyboardc/Info.plist</key>
 		<data>
-		owhyzIGgq6BjSRGFZzI+R8rKFCw=
+		Bngffn/G4u2w2zgGmLU3B+KamaA=
 		</data>
 		<key>Resources/Controllers.storyboardc/MainController.nib</key>
 		<data>
-		xPY2eOhPCMzuYrbsVCtim49t83A=
+		4AVCsicN6+LZ2LHaH9fGf8/vzSE=
 		</data>
 		<key>Resources/Controllers.storyboardc/MainMenu.nib</key>
 		<data>
 		x7roqxhR3XYUZloofvo4RX8t58o=
 		</data>
-		<key>Resources/Controllers.storyboardc/SettingsController.nib</key>
-		<data>
-		vHQnBPQNRHSO68gP987URWKBL7s=
-		</data>
 		<key>Resources/Controllers.storyboardc/UKh-ye-bPO-view-wBh-Ot-TGR.nib</key>
 		<data>
-		hNVM17pdJjhUTDB0IsfnpA1tH6U=
-		</data>
-		<key>Resources/Controllers.storyboardc/aIO-ci-xyZ-view-GQP-k5-Kfj.nib</key>
-		<data>
-		ac/gCkE1YJtHVXqpjjQa0+5ga7Q=
+		ZOR/kUEK9Daj1AnAuyeSFYSdBYE=
 		</data>
 		<key>Resources/KeyboardShortcuts_KeyboardShortcuts.bundle/Contents/Info.plist</key>
 		<data>
-		Zb494hrhZ/nM6SjmGGKQyyVMKGQ=
+		GmNFCdUXO/GhMaa/2HrlDzXglzc=
 		</data>
 		<key>Resources/KeyboardShortcuts_KeyboardShortcuts.bundle/Contents/Resources/ar.lproj/Localizable.strings</key>
 		<dict>
@@ -182,10 +174,10 @@
 		<dict>
 			<key>cdhash</key>
 			<data>
-			lMyxZwOuFohh+Fcknez4IbkEo/A=
+			Pr3e+QFHQ3D2oyoywLeBrPU4s88=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"94ccb16703ae168861f857249decf821b904a3f0" or cdhash H"2df8f77ca131cd10508992f453212709099ea525"</string>
+			<string>cdhash H"3ebddef901474370f6a32a32c0b781acf538b3cf" or cdhash H"2df8f77ca131cd10508992f453212709099ea525"</string>
 		</dict>
 		<key>Library/LoginItems/LaunchAtLoginHelper.app</key>
 		<dict>
@@ -207,21 +199,21 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			6qnJLiWKU8W8J20QYeK6wX65vUyfBpGgCq62LYkgaMo=
+			6th+0JPMwADuHCy0QNzYfqaQ3tFnE6WnEwdC75ze8mQ=
 			</data>
 		</dict>
 		<key>Resources/Controllers.storyboardc/Info.plist</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			x6tC5UMNYD4nsyotkp3Yi2wJmmK4q68MZ3RtN+rRrkQ=
+			ZWHoDrlK6AckduQQvhdvv9F0z5Yx+rfwR6U7GKP1Lcc=
 			</data>
 		</dict>
 		<key>Resources/Controllers.storyboardc/MainController.nib</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			BzD4jHvq+tU5ANM/gyZvkBEX2/ndKNhFFROSyHfnxRU=
+			WvArSqc6Qsrj6OzyrE00lSV1ztjLidvsNFgVPJfUfBE=
 			</data>
 		</dict>
 		<key>Resources/Controllers.storyboardc/MainMenu.nib</key>
@@ -231,32 +223,18 @@
 			JmCxVvwnPRP4nHGga7jrycT+dy3RPL2Rn6qmeMtO3PY=
 			</data>
 		</dict>
-		<key>Resources/Controllers.storyboardc/SettingsController.nib</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			TC03zhf9L/3kn8ms/JzHtwiQRCj10qfdlxRbiCP5Djc=
-			</data>
-		</dict>
 		<key>Resources/Controllers.storyboardc/UKh-ye-bPO-view-wBh-Ot-TGR.nib</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			uBwimTktQsra2KSbhdAqFG7zKuj9FEA8JnveNzv9Qus=
-			</data>
-		</dict>
-		<key>Resources/Controllers.storyboardc/aIO-ci-xyZ-view-GQP-k5-Kfj.nib</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			ShkMsjxEyOipeP/Y7UkbA53tVJ2/rpWuWkeAMdsuJ90=
+			tX+/rLFsVCcUj2dc5Z7xDR9Ro1aUWkK9g86PSlJWFAE=
 			</data>
 		</dict>
 		<key>Resources/KeyboardShortcuts_KeyboardShortcuts.bundle/Contents/Info.plist</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			Dj0SsoZUS7mHtlf9Tk6BGgesHKQ8zBAMoyr3g6UNmBk=
+			uKAQBvFBqIFmVpovzZZ92ZVLCykzjPc+TBWBwJSSjTw=
 			</data>
 		</dict>
 		<key>Resources/KeyboardShortcuts_KeyboardShortcuts.bundle/Contents/Resources/ar.lproj/Localizable.strings</key>
