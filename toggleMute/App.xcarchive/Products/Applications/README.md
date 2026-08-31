@@ -25,6 +25,7 @@
    - **Show HUD** – briefly shows an on-screen overlay (similar to the system volume/brightness HUD) whenever the mic gets muted or unmuted.
       - **Always show HUD** – keeps the HUD permanently visible instead of fading out after a second.
       - **Red HUD icon** – tints the HUD icon red while muted.
+      - **Show device name** – widens the HUD to show the name of the current input device next to the icon.
    - **Red Menubar Background** / **Red Menubar Icon** – optionally tint the Menu Bar icon and/or give it a red background while muted, for extra visibility at a glance.
    - **Set Input Volume to 0** – in addition to the normal mute, also sets the input volume to 0 while muted. Useful for devices/drivers that don't fully respect the standard mute signal.
    - **Push to talk** – hold the keyboard shortcut to go live only while it's held down; release to mute again immediately. (Push to talk only works via the keyboard shortcut, not by holding down the Menu Bar icon.)
