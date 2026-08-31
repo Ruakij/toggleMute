@@ -97,7 +97,7 @@ final class HUDController {
         panel.setContentSize(panelSize)
         positionOnScreen(panel, size: panelSize)
 
-        let tint: NSColor = (muted && red) ? MuteController.redColor : .white
+        let tint: NSColor = (muted && red) ? MuteController.redColor : .controlTextColor
         imageView?.image = symbolImage(muted: muted)
         imageView?.contentTintColor = tint
         deviceNameLabel?.textColor = tint
@@ -167,10 +167,8 @@ final class HUDController {
         newEffectView.material = .hudWindow
         newEffectView.blendingMode = .behindWindow
         newEffectView.state = .active
-        newEffectView.wantsLayer = true
-        newEffectView.layer?.cornerRadius = cornerRadius
-        newEffectView.layer?.masksToBounds = true
-
+        newEffectView.maskImage = Self.roundedCornerMaskImage(cornerRadius: cornerRadius)
+        
         let newImageView = NSImageView()
         newImageView.imageScaling = .scaleProportionallyUpOrDown
         // The rendered image is a template (see symbolImage(muted:)); this
@@ -204,7 +202,25 @@ final class HUDController {
 
     }
 
-
+    private static func roundedCornerMaskImage(cornerRadius: CGFloat) -> NSImage {
+        let image = NSImage(
+            size: NSSize(width: cornerRadius * 2, height: cornerRadius * 2),
+            flipped: false
+        ) { rect in
+            NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+            NSColor.black.set()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(
+            top: cornerRadius,
+            left: cornerRadius,
+            bottom: cornerRadius,
+            right: cornerRadius
+        )
+        image.resizingMode = .stretch
+        return image
+    }
+    
     private func layout(size: NSSize, showingDeviceName: Bool, deviceName: String?) {
 
         effectView?.frame = NSRect(origin: .zero, size: size)

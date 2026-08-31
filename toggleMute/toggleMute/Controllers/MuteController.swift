@@ -88,7 +88,7 @@ class MuteController {
             defaults.set(false, forKey: "isMuted")
             isMuted = false
 
-            button?.image = imageUnmute?.tint(color: .alternateSelectedControlTextColor)
+            button?.image = imageUnmute?.tint(color: .controlTextColor)
 
             button?.layer?.backgroundColor = CGColor(red: 0, green: 0, blue: 0 , alpha: 0)
 
@@ -107,7 +107,7 @@ class MuteController {
             defaults.set(true, forKey: "isMuted")
             isMuted = true
 
-            button?.image = imageMute?.tint(color: .selectedMenuItemTextColor)
+            button?.image = imageMute?.tint(color: .controlTextColor)
             button?.layer?.backgroundColor = CGColor(red: 0, green: 0, blue: 0 , alpha: 0)
 
             AudioInputController.setMuted(true)
