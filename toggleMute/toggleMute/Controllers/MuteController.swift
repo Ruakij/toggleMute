@@ -49,7 +49,8 @@ class MuteController {
         // first mute/unmute.
         if(defaults.bool(forKey: "hudEnabled") && defaults.bool(forKey: "hudAlwaysVisible")) {
             let redHUD = defaults.bool(forKey: "hudRedIconEnabled")
-            HUDController.shared.show(muted: isMuted, sticky: true, red: redHUD)
+            let deviceName = defaults.bool(forKey: "hudShowDeviceName") ? AudioInputController.deviceName() : nil
+            HUDController.shared.show(muted: isMuted, sticky: true, red: redHUD, deviceName: deviceName)
         }
     
     }
@@ -143,7 +144,8 @@ class MuteController {
         if(defaults.bool(forKey: "hudEnabled")) {
             let redHUD = defaults.bool(forKey: "hudRedIconEnabled")
             let alwaysVisible = defaults.bool(forKey: "hudAlwaysVisible")
-            HUDController.shared.show(muted: muted, sticky: holdHUD || alwaysVisible, red: redHUD)
+            let deviceName = defaults.bool(forKey: "hudShowDeviceName") ? AudioInputController.deviceName() : nil
+            HUDController.shared.show(muted: muted, sticky: holdHUD || alwaysVisible, red: redHUD, deviceName: deviceName)
         }
 
         if(defaults.bool(forKey: "soundsEnabled")) {

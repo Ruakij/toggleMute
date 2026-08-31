@@ -30,6 +30,13 @@ enum AudioInputController {
         return readVolume(deviceID: deviceID)
     }
 
+    /// The default input device's display name (e.g. "MacBook Pro Microphone",
+    /// "Jabra Elite 7 Pro"), or nil if it can't be read.
+    static func deviceName() -> String? {
+        guard let deviceID = defaultInputDeviceID() else { return nil }
+        return readDeviceName(deviceID: deviceID)
+    }
+
     // MARK: - Device lookup
 
     private static func defaultInputDeviceID() -> AudioDeviceID? {
@@ -269,5 +276,26 @@ enum AudioInputController {
             return nil
         }
         return value
+    }
+
+    // MARK: - Device name
+
+    private static func readDeviceName(deviceID: AudioDeviceID) -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectHasProperty(deviceID, &address) else { return nil }
+        // kAudioObjectPropertyName hands back an already-retained CFStringRef.
+        // A plain `var name: CFString` target doesn't reliably line up with
+        // what CoreAudio writes into that memory (Swift's CFString bridging
+        // isn't guaranteed to match a raw pointer-sized C write) — Unmanaged
+        // is the correct, documented way to receive CF "Get" properties.
+        var unmanagedName: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &unmanagedName)
+        guard status == noErr, let unmanagedName = unmanagedName else { return nil }
+        return unmanagedName.takeRetainedValue() as String
     }
 }

@@ -45,6 +45,7 @@ class MainController: NSViewController {
     @IBOutlet weak var showHUDCheckBox: NSButton!
     @IBOutlet weak var hudAlwaysVisibleCheckBox: NSButton!
     @IBOutlet weak var redHUDIconCheckBox: NSButton!
+    @IBOutlet weak var showDeviceNameCheckBox: NSButton!
     @IBOutlet weak var muteInputVolumeCheckBox: NSButton!
 
     // Red menu bar
@@ -119,6 +120,7 @@ class MainController: NSViewController {
         showHUDCheckBox.state = preferences.hudEnabled ? .on : .off
         hudAlwaysVisibleCheckBox.state = preferences.hudAlwaysVisible ? .on : .off
         redHUDIconCheckBox.state = preferences.hudRedIconEnabled ? .on : .off
+        showDeviceNameCheckBox.state = preferences.hudShowDeviceName ? .on : .off
         muteInputVolumeCheckBox.state = preferences.muteInputVolumeEnabled ? .on : .off
 
         // Red menu bar
@@ -281,8 +283,11 @@ class MainController: NSViewController {
 
         if(!enabled) {
             HUDController.shared.hide()
-        } else if(preferences.hudAlwaysVisible) {
-            HUDController.shared.show(muted: defaults.bool(forKey: "isMuted"), sticky: true, red: preferences.hudRedIconEnabled)
+        } else {
+            HUDController.shared.requestAccessibilityPermissionIfNeeded()
+            if(preferences.hudAlwaysVisible) {
+                refreshAlwaysVisibleHUD()
+            }
         }
 
     }
@@ -295,7 +300,7 @@ class MainController: NSViewController {
 
         if(enabled) {
             if(preferences.hudEnabled) {
-                HUDController.shared.show(muted: defaults.bool(forKey: "isMuted"), sticky: true, red: preferences.hudRedIconEnabled)
+                refreshAlwaysVisibleHUD()
             }
         } else {
             HUDController.shared.hide()
@@ -307,6 +312,33 @@ class MainController: NSViewController {
     @IBAction func didTouchRedHUDIcon(_ sender: NSButton) {
 
         preferences.hudRedIconEnabled = sender.state == .on
+
+        if(preferences.hudEnabled && preferences.hudAlwaysVisible) {
+            refreshAlwaysVisibleHUD()
+        }
+
+    }
+
+
+    @IBAction func didTouchShowDeviceName(_ sender: NSButton) {
+
+        preferences.hudShowDeviceName = sender.state == .on
+
+        if(preferences.hudEnabled && preferences.hudAlwaysVisible) {
+            refreshAlwaysVisibleHUD()
+        }
+
+    }
+
+
+    // Re-shows the permanently-visible HUD with current settings applied —
+    // used whenever a setting that affects its appearance changes while
+    // "Always show HUD" is already active, so the change is reflected
+    // immediately instead of only on the next mute/unmute.
+    private func refreshAlwaysVisibleHUD() {
+
+        let deviceName = preferences.hudShowDeviceName ? AudioInputController.deviceName() : nil
+        HUDController.shared.show(muted: defaults.bool(forKey: "isMuted"), sticky: true, red: preferences.hudRedIconEnabled, deviceName: deviceName)
 
     }
 

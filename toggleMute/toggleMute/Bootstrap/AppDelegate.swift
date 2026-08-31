@@ -62,6 +62,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // performUpdateCheckIfDue() for the actual 24h gating.
         performUpdateCheckIfDue()
         updateCheckTimer = Timer.scheduledTimer(timeInterval: 3600, target: self, selector: #selector(performUpdateCheckIfDue), userInfo: nil, repeats: true)
+
+        // Only relevant to the HUD's fullscreen-aware positioning (see
+        // HUDController.isFullScreenAppActive) — only asked of people who've
+        // actually turned the HUD on, not every user. Without this, that
+        // check just quietly returns false and the HUD keeps its normal
+        // top-right spot, so declining here doesn't break anything else.
+        if UserDefaults.standard.bool(forKey: "hudEnabled") {
+            HUDController.shared.requestAccessibilityPermissionIfNeeded()
+        }
         
         if let button = self.statusItem.button {
             

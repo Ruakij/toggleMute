@@ -51,6 +51,14 @@ struct Preferences {
         }
     }
 
+    var hudShowDeviceName: Bool {
+        get { defaults.bool(forKey: #function) }
+        set {
+            defaults.set(newValue, forKey: #function)
+            didChange()
+        }
+    }
+
     var muteInputVolumeEnabled: Bool {
         get { defaults.bool(forKey: #function) }
         set {
