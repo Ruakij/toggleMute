@@ -99,7 +99,7 @@ final class HUDController {
         newPanel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
         newPanel.isReleasedWhenClosed = false
 
-        let newImageView = NSImageView(frame: NSRect(x: 8, y: 8, width: 48, height: 48))
+        let newImageView = NSImageView(frame: NSRect(x: 16, y: 16, width: 32, height: 32))
         newImageView.imageScaling = .scaleProportionallyUpOrDown
         // The rendered image is a template (see symbolImage(muted:)); this
         // tint is what actually makes it white/red — see present(muted:sticky:red:).
@@ -172,7 +172,15 @@ final class HUDController {
 
     private func positionTopRight(_ panel: NSPanel) {
 
-        guard let screen = NSScreen.main else { return }
+        // NSScreen.main can transiently be nil very early in a background
+        // (LSUIElement) app's lifecycle — before the window server has
+        // fully registered it, since there's no window to anchor to yet.
+        // This is most likely to bite on the very first HUD trigger right
+        // after a cold launch. Falling back to the first available screen
+        // (rather than silently skipping positioning, which left the panel
+        // shown at its default near-origin position) keeps the HUD visible
+        // and correctly placed even in that race.
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
         let x = screen.visibleFrame.maxX - size.width - screenMarginRight
         let y = screen.visibleFrame.maxY - size.height - screenMarginTop
