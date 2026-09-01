@@ -62,6 +62,9 @@ brew update
 brew updgrade
 xattr -cr /Applications/toggleMute.app
 ```
+> [!Important]  
+> If you have problems with the HUD position in fullscreen apps, please go to `System Settings > Privacy & Security > Accessibility` and delete the toggleMute entry.
+> Then just open the toggleMute settings and disable/enable _Show HUD_ to get the permissions again
 
 ### Manually 
 Repeat the steps from the manually install section and replace the old app

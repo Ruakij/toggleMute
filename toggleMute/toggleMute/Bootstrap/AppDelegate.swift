@@ -185,9 +185,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     func sendNotification() {
 
-        // Homebrew-cask installs live under a "Caskroom" path — point those
-        // users at `brew upgrade` instead of a manual download.
-        let installedViaBrew = Bundle.main.bundlePath.contains("/Caskroom/")
+        // Homebrew Cask copies/moves the .app straight into /Applications —
+        // its bundle path looks identical to a manual install, so checking
+        // Bundle.main.bundlePath for anything Homebrew-specific never
+        // matches. Homebrew does keep its own bookkeeping in a separate
+        // Caskroom directory regardless of where the .app itself ends up,
+        // so check for that instead.
+        let installedViaBrew = ["/opt/homebrew/Caskroom/togglemute", "/usr/local/Caskroom/togglemute"]
+            .contains { FileManager.default.fileExists(atPath: $0) }
 
         let msgBody = installedViaBrew
             ? "Run \"brew update && brew upgrade togglemute\" in your terminal to update"
