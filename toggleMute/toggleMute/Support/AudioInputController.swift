@@ -37,6 +37,65 @@ enum AudioInputController {
         return readDeviceName(deviceID: deviceID)
     }
 
+    // MARK: - Change listeners
+
+    private static var onDevicesChanged: (() -> Void)?
+    private static var onStateChanged: (() -> Void)?
+    private static var watchedDeviceIDs: [AudioDeviceID] = []
+
+    // Stored once so the identical block can be passed to the remove call.
+    private static let devicesListener: AudioObjectPropertyListenerBlock = { _, _ in
+        refreshWatchedDevices()
+        onDevicesChanged?()
+    }
+    private static var stateSyncScheduled = false
+    // One write notifies once per channel and sub-device; one sync covers the burst.
+    private static let stateListener: AudioObjectPropertyListenerBlock = { _, _ in
+        guard !stateSyncScheduled else { return }
+        stateSyncScheduled = true
+        DispatchQueue.main.async {
+            stateSyncScheduled = false
+            onStateChanged?()
+        }
+    }
+
+    private static let systemAddresses = [
+        kAudioHardwarePropertyDefaultInputDevice,
+        kAudioHardwarePropertyDevices,
+    ].map { AudioObjectPropertyAddress(mSelector: $0, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain) }
+
+    private static let stateAddresses = [
+        kAudioDevicePropertyMute,
+        kAudioDevicePropertyVolumeScalar,
+    ].map { AudioObjectPropertyAddress(mSelector: $0, mScope: kAudioDevicePropertyScopeInput, mElement: kAudioObjectPropertyElementWildcard) }
+
+    /// Calls `devicesChanged` when the default input may have changed
+    /// (switched, device plugged in or removed) and `stateChanged` when mute
+    /// or input volume of the default input changes, e.g. from a headset's hardware mute button. Both run on main.
+    static func startMonitoring(devicesChanged: @escaping () -> Void, stateChanged: @escaping () -> Void) {
+        onDevicesChanged = devicesChanged
+        onStateChanged = stateChanged
+        for var address in systemAddresses {
+            AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, devicesListener)
+        }
+        refreshWatchedDevices()
+    }
+
+    /// Moves the state listeners to the current default input device.
+    private static func refreshWatchedDevices() {
+        for deviceID in watchedDeviceIDs {
+            for var address in stateAddresses {
+                AudioObjectRemovePropertyListenerBlock(deviceID, &address, .main, stateListener)
+            }
+        }
+        watchedDeviceIDs = defaultInputDeviceID().map(expandedTargets) ?? []
+        for deviceID in watchedDeviceIDs {
+            for var address in stateAddresses {
+                AudioObjectAddPropertyListenerBlock(deviceID, &address, .main, stateListener)
+            }
+        }
+    }
+
     // MARK: - Device lookup
 
     private static func defaultInputDeviceID() -> AudioDeviceID? {
@@ -52,6 +111,13 @@ enum AudioInputController {
         )
         guard status == noErr, id != kAudioObjectUnknown else { return nil }
         return id
+    }
+
+    /// The devices that actually carry mute/volume: the input sub-devices of
+    /// an aggregate, or the device itself.
+    private static func expandedTargets(_ deviceID: AudioDeviceID) -> [AudioDeviceID] {
+        let subs = subDeviceIDs(of: deviceID)
+        return subs.isEmpty ? [deviceID] : subs.filter(hasInputStream)
     }
 
     private static func subDeviceIDs(of aggregate: AudioDeviceID) -> [AudioDeviceID] {
@@ -111,8 +177,7 @@ enum AudioInputController {
     // MARK: - Mute
 
     private static func applyMute(deviceID: AudioDeviceID, muted: Bool) {
-        let subs = subDeviceIDs(of: deviceID)
-        let targets = subs.isEmpty ? [deviceID] : subs.filter(hasInputStream)
+        let targets = expandedTargets(deviceID)
         for target in targets {
             if !setMuteProperty(target, muted: muted) {
                 // Fallback when the device exposes no writable mute: drive volume to 0/1.
@@ -150,8 +215,7 @@ enum AudioInputController {
     }
 
     private static func readMute(deviceID: AudioDeviceID) -> Bool? {
-        let subs = subDeviceIDs(of: deviceID)
-        let targets = subs.isEmpty ? [deviceID] : subs.filter(hasInputStream)
+        let targets = expandedTargets(deviceID)
 
         var mutePropertyResult: Bool?
         for target in targets {
@@ -209,8 +273,7 @@ enum AudioInputController {
 
     private static func applyVolume(deviceID: AudioDeviceID, volume: Float32) {
         let clamped = max(0, min(1, volume))
-        let subs = subDeviceIDs(of: deviceID)
-        let targets = subs.isEmpty ? [deviceID] : subs.filter(hasInputStream)
+        let targets = expandedTargets(deviceID)
         for target in targets {
             _ = setVolumeProperty(target, volume: clamped)
         }
@@ -245,8 +308,7 @@ enum AudioInputController {
     }
 
     private static func readVolume(deviceID: AudioDeviceID) -> Float32? {
-        let subs = subDeviceIDs(of: deviceID)
-        let targets = subs.isEmpty ? [deviceID] : subs.filter(hasInputStream)
+        let targets = expandedTargets(deviceID)
         for target in targets {
             if let v = readVolumeOnDevice(target) { return v }
         }
