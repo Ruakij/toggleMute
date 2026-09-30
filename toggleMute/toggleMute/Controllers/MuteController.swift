@@ -136,7 +136,7 @@ class MuteController {
 
 
     // Only called from the two branches above, i.e. only on an actual state
-    // change — never on the periodic hardware-sync no-ops in runTimedCode().
+    // change — never on the hardware-sync no-ops in syncFromHardware().
     // `holdHUD` keeps the HUD on screen without auto-dismissing, used while
     // push-to-talk is being held down.
     private func notifyStateChange(muted: Bool, holdHUD: Bool) {

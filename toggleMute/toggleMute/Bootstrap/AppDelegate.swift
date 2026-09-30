@@ -15,11 +15,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     let repoUrl = URL(string: "https://github.com/satrik/toggleMute")!
     let popoverView = NSPopover()
     var eventMonitor: EventMonitor?
-    var refreshTimer: Timer?
     var updateCheckTimer: Timer?
 
-    // Tracks whether the last poll saw input volume near zero — used by
-    // runTimedCode() to detect a volume recovery (see there for why).
+    // Tracks whether the last sync saw input volume near zero — used by
+    // syncFromHardware() to detect a volume recovery (see there for why).
     private var lastPolledVolumeWasNearZero: Bool?
 
     
@@ -51,8 +50,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         
         LaunchAtLogin.migrateIfNeeded()
-        
-        refreshTimer = Timer.scheduledTimer(timeInterval: 1, target: self, selector: #selector(runTimedCode), userInfo: nil, repeats: true)
         
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
@@ -104,6 +101,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         
         muteController.configureUI()
+
+        AudioInputController.startMonitoring(
+            devicesChanged: { [weak self] in self?.inputDevicesChanged() },
+            stateChanged: { [weak self] in self?.syncFromHardware() }
+        )
         
         KeyboardShortcuts.onKeyDown(for: .toggleMuteShortcut) {
             if self.preferences.pushToTalkEnabled {
@@ -218,7 +220,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
     
     
-    @objc func runTimedCode(){
+    // A different device's volume says nothing about a recovery on the
+    // previous one; see syncFromHardware().
+    func inputDevicesChanged() {
+
+        lastPolledVolumeWasNearZero = nil
+
+    }
+
+
+    func syncFromHardware() {
 
         // Sync UI to the actual device state so the icon reflects external mute
         // changes (e.g. from the system menu). Reads the real CoreAudio mute
