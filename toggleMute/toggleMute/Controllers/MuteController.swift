@@ -111,6 +111,25 @@ class MuteController {
     }
 
 
+    func updateMenuBarIcon() {
+
+        let button = delegateController.statusItem.button
+        let redIcon = isMuted && defaults.bool(forKey: "redMenuBarIcon")
+        let redBackground = isMuted && defaults.bool(forKey: "redMenuBarBackground")
+        button?.image = (isMuted ? imageMute : imageUnmute)?.tint(color: redIcon ? MuteController.redColor : .controlTextColor)
+        button?.layer?.backgroundColor = redBackground ? MuteController.redColor.cgColor : .clear
+
+    }
+
+
+    func applyMuteStateToDevices() {
+
+        guard defaults.bool(forKey: "isMuted") else { return }
+        AudioInputController.setMuted(true, zeroVolume: defaults.bool(forKey: "muteInputVolumeEnabled"))
+
+    }
+
+
     // Only called from the two branches above, i.e. only on an actual state
     // change — never on the hardware-sync no-ops in syncFromHardware().
     // `holdHUD` keeps the HUD on screen without auto-dismissing, used while
