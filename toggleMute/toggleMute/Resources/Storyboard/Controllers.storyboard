@@ -27,39 +27,9 @@
             <objects>
                 <viewController storyboardIdentifier="MainController" id="UKh-ye-bPO" customClass="MainController" customModule="toggleMute" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="wBh-Ot-TGR">
-                        <rect key="frame" x="0.0" y="0.0" width="230" height="474"/>
+                        <rect key="frame" x="0.0" y="0.0" width="230" height="410"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <slider verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="xQD-3C-Krn">
-                                <rect key="frame" x="20" y="432" width="190" height="28"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <sliderCell key="cell" continuous="YES" state="on" alignment="left" maxValue="100" doubleValue="50" tickMarkPosition="above" sliderType="linear" id="jWU-Hq-Rpy"/>
-                                <connections>
-                                    <action selector="didChangeSlider:" target="UKh-ye-bPO" id="Eoi-uy-Gam"/>
-                                </connections>
-                            </slider>
-                            <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="yeF-nR-gkA">
-                                <rect key="frame" x="20" y="410" width="152" height="16"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <textFieldCell key="cell" lineBreakMode="clipping" title="Unmute Volume:" id="I8W-T9-gRc">
-                                    <font key="font" metaFont="system"/>
-                                    <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
-                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                </textFieldCell>
-                            </textField>
-                            <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="2yx-zG-KVq">
-                                <rect key="frame" x="178" y="410" width="32" height="16"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <textFieldCell key="cell" lineBreakMode="clipping" title="000" id="yEl-Im-KIq">
-                                    <font key="font" metaFont="system"/>
-                                    <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
-                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                </textFieldCell>
-                            </textField>
-                            <box verticalHuggingPriority="750" fixedFrame="YES" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="VOL-01-sep">
-                                <rect key="frame" x="12" y="400" width="206" height="5"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                            </box>
                             <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="PtT-01-btn">
                                 <rect key="frame" x="20" y="182" width="190" height="18"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
@@ -242,8 +212,6 @@
                         </subviews>
                     </view>
                     <connections>
-                        <outlet property="inputValueLabel" destination="2yx-zG-KVq" id="mrb-tY-Fm5"/>
-                        <outlet property="inputValueSlider" destination="xQD-3C-Krn" id="8kg-je-A8A"/>
                         <outlet property="hudAlwaysVisibleCheckBox" destination="ASH-01-btn" id="ASH-04-out"/>
                         <outlet property="launchAtLoginCheckBox" destination="09C-uc-Vc0" id="26M-gn-LQB"/>
                         <outlet property="muteInputVolumeCheckBox" destination="ZVM-01-btn" id="ZVM-04-out"/>

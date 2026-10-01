@@ -8,20 +8,17 @@ enum AudioInputController {
 
     // MARK: - Public API
 
-    static func setMuted(_ muted: Bool) {
+    /// With `zeroVolume`, muting also drives the input volume to 0, for
+    /// devices that dont fully respect the mute property. Unmuting a device
+    /// at volume 0 brings back the last volume it had above zero.
+    static func setMuted(_ muted: Bool, zeroVolume: Bool = false) {
         guard let deviceID = defaultInputDeviceID() else { return }
-        applyMute(deviceID: deviceID, muted: muted)
+        setMuted(deviceID, muted: muted, zeroVolume: zeroVolume)
     }
 
     static func isMuted() -> Bool? {
         guard let deviceID = defaultInputDeviceID() else { return nil }
         return readMute(deviceID: deviceID)
-    }
-
-    /// `volume` is 0.0 ... 1.0
-    static func setVolume(_ volume: Float32) {
-        guard let deviceID = defaultInputDeviceID() else { return }
-        applyVolume(deviceID: deviceID, volume: volume)
     }
 
     /// Returns 0.0 ... 1.0, or nil if no readable volume property is present.
@@ -34,7 +31,7 @@ enum AudioInputController {
     /// "Jabra Elite 7 Pro"), or nil if it can't be read.
     static func deviceName() -> String? {
         guard let deviceID = defaultInputDeviceID() else { return nil }
-        return readDeviceName(deviceID: deviceID)
+        return readString(deviceID, selector: kAudioObjectPropertyName)
     }
 
     // MARK: - Change listeners
@@ -55,6 +52,7 @@ enum AudioInputController {
         stateSyncScheduled = true
         DispatchQueue.main.async {
             stateSyncScheduled = false
+            recordVolumes()
             onStateChanged?()
         }
     }
@@ -94,6 +92,7 @@ enum AudioInputController {
                 AudioObjectAddPropertyListenerBlock(deviceID, &address, .main, stateListener)
             }
         }
+        recordVolumes()
     }
 
     // MARK: - Device lookup
@@ -175,6 +174,37 @@ enum AudioInputController {
     }
 
     // MARK: - Mute
+
+    private static func setMuted(_ deviceID: AudioDeviceID, muted: Bool, zeroVolume: Bool) {
+        applyMute(deviceID: deviceID, muted: muted)
+        if muted {
+            if zeroVolume { applyVolume(deviceID: deviceID, volume: 0) }
+            return
+        }
+        // An unmuted mic at volume 0 stays silent.
+        guard let volume = readVolume(deviceID: deviceID), volume < 0.05 else { return }
+        let last = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
+        let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID)
+        // 0.8 for devices we havent stored a last volume for yet.
+        applyVolume(deviceID: deviceID, volume: Float32(uid.flatMap { last[$0] } ?? 0.8))
+    }
+
+    // MARK: - Volume memory
+
+    private static let lastVolumesKey = "lastVolumes"
+
+    /// Keeps the last volume above zero of each controlled device, so that
+    /// unmuting can undo a zeroed volume (by this app, a headsets hardware
+    /// mute, or by hand).
+    private static func recordVolumes() {
+        var last = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
+        for deviceID in (defaultInputDeviceID().map { [$0] } ?? []) {
+            guard let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID),
+                  let volume = readVolume(deviceID: deviceID), volume >= 0.05 else { continue }
+            last[uid] = Double(volume)
+        }
+        UserDefaults.standard.set(last, forKey: lastVolumesKey)
+    }
 
     private static func applyMute(deviceID: AudioDeviceID, muted: Bool) {
         let targets = expandedTargets(deviceID)
@@ -340,16 +370,16 @@ enum AudioInputController {
         return value
     }
 
-    // MARK: - Device name
+    // MARK: - String properties
 
-    private static func readDeviceName(deviceID: AudioDeviceID) -> String? {
+    private static func readString(_ deviceID: AudioDeviceID, selector: AudioObjectPropertySelector) -> String? {
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioObjectPropertyName,
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
         guard AudioObjectHasProperty(deviceID, &address) else { return nil }
-        // kAudioObjectPropertyName hands back an already-retained CFStringRef.
+        // CFString properties hand back an already-retained CFStringRef.
         // A plain `var name: CFString` target doesn't reliably line up with
         // what CoreAudio writes into that memory (Swift's CFString bridging
         // isn't guaranteed to match a raw pointer-sized C write) — Unmanaged
