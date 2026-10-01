@@ -16,6 +16,12 @@ enum AudioInputController {
         setMuted(deviceID, muted: muted, zeroVolume: zeroVolume)
     }
 
+    /// Gives devices at volume 0 their last volume above zero back.
+    static func restoreZeroedVolumes() {
+        guard let deviceID = defaultInputDeviceID() else { return }
+        restoreZeroedVolume(deviceID)
+    }
+
     static func isMuted() -> Bool? {
         guard let deviceID = defaultInputDeviceID() else { return nil }
         return readMute(deviceID: deviceID)
@@ -182,6 +188,10 @@ enum AudioInputController {
             return
         }
         // An unmuted mic at volume 0 stays silent.
+        restoreZeroedVolume(deviceID)
+    }
+
+    private static func restoreZeroedVolume(_ deviceID: AudioDeviceID) {
         guard let volume = readVolume(deviceID: deviceID), volume < 0.05 else { return }
         let last = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
         let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID)

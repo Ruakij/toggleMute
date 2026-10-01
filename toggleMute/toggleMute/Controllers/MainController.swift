@@ -290,6 +290,12 @@ class MainController: NSViewController {
     @IBAction func didTouchMuteInputVolume(_ sender: NSButton) {
 
         preferences.muteInputVolumeEnabled = sender.state == .on
+        guard delegateController.muteController.isMuted else { return }
+        if preferences.muteInputVolumeEnabled {
+            AudioInputController.setMuted(true, zeroVolume: true)
+        } else {
+            AudioInputController.restoreZeroedVolumes()
+        }
 
     }
 
