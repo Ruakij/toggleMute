@@ -123,10 +123,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 self.muteController.toggleMuteStateHard(setMute: true)
             }
         }
-        
+
     }
-    
-    
+
+
+    // Leaves no microphone muted without the app around to unmute it. The
+    // stored "isMuted" stays, so the next launch mutes again.
+    func applicationWillTerminate(_ notification: Notification) {
+
+        if muteController.isMuted { AudioInputController.setMuted(false) }
+
+    }
+
+
     // Runs the actual check only if it's never run before, or it's been at
     // least a day since the last one — called at launch and then every hour
     // to re-evaluate, which (unlike a bare 24h timer) keeps working
