@@ -61,16 +61,6 @@ class MuteController {
     }
     
     
-    func setNewVolume(newValue: Int) {
-        // Drives the *gain* of the default input device (used when restoring the
-        // user's preferred input volume on unmute, and when the slider moves).
-        // AppleScript's `set volume input volume` is a no-op on Aggregate Devices,
-        // so go through CoreAudio.
-        let clamped = max(0, min(100, newValue))
-        AudioInputController.setVolume(Float32(clamped) / 100.0)
-    }
-    
-
     func toggleMuteState() {
         toggleMuteStateHard(setMute: !isMuted)
     }
@@ -94,12 +84,6 @@ class MuteController {
 
             AudioInputController.setMuted(false)
 
-            var unmuteVal = 80
-            if(isKeyPresentInUserDefaults(key: "defaultInputVol")){
-                unmuteVal = defaults.integer(forKey: "defaultInputVol")
-            }
-            setNewVolume(newValue: unmuteVal)
-
             if notify { notifyStateChange(muted: false, holdHUD: holdHUD) }
 
         } else if(setMute && !isMuted) {
@@ -110,15 +94,7 @@ class MuteController {
             button?.image = imageMute?.tint(color: .controlTextColor)
             button?.layer?.backgroundColor = CGColor(red: 0, green: 0, blue: 0 , alpha: 0)
 
-            AudioInputController.setMuted(true)
-
-            if(defaults.bool(forKey: "muteInputVolumeEnabled")) {
-                // Optional extra hard-mute: also zero the input gain, for
-                // devices/drivers that don't fully respect CoreAudio's mute
-                // property on their own. The unmute branch above already
-                // restores the configured volume unconditionally.
-                setNewVolume(newValue: 0)
-            }
+            AudioInputController.setMuted(true, zeroVolume: defaults.bool(forKey: "muteInputVolumeEnabled"))
 
             if(redMenuBarIcon){
                 button?.image = imageMute?.tint(color: MuteController.redColor)

@@ -34,10 +34,6 @@ final class ClickableLabel: NSTextField {
 /// nested settings popover.
 class MainController: NSViewController {
 
-    // Volume
-    @IBOutlet weak var inputValueLabel: NSTextField!
-    @IBOutlet weak var inputValueSlider: NSSlider!
-
     // General toggles
     @IBOutlet var launchAtLoginCheckBox: NSButton!
     @IBOutlet weak var pushToTalkCheckBox: NSButton!
@@ -66,7 +62,6 @@ class MainController: NSViewController {
 
     let repoUrl = URL(string: "https://github.com/satrik/toggleMute")!
     let defaults = UserDefaults.standard
-    var currentSetVolume = 0
 
     static func instantiate(with preferences: Preferences) -> MainController {
 
@@ -93,14 +88,6 @@ class MainController: NSViewController {
 
         super.viewDidLoad()
         setupNotifications()
-
-        // Volume
-        if(isKeyPresentInUserDefaults(key: "defaultInputVol")) {
-            inputValueSlider.integerValue = defaults.integer(forKey: "defaultInputVol")
-        }
-        let val = inputValueSlider.integerValue
-        inputValueLabel?.stringValue = String(val)
-        getCurrentVolume()
 
         // Version. Only the number is clickable — see ClickableLabel. The
         // two labels are centered together as a pair at runtime since the
@@ -200,49 +187,6 @@ class MainController: NSViewController {
         numberFrame.origin.y = versionPrefixLabel.frame.origin.y
         versionNumberLabel.frame = numberFrame
 
-    }
-
-
-    @IBAction func didChangeSlider(_ sender: Any) {
-
-        guard let slider = sender as? NSSlider,
-              let event = NSApplication.shared.currentEvent else { return }
-        let val = slider.integerValue
-
-        switch event.type {
-
-        case .leftMouseDown, .rightMouseDown:
-            break
-            // nothing to do if drag just started
-
-        case .leftMouseUp, .rightMouseUp:
-            inputValueLabel?.stringValue = String(val)
-            defaults.set(val, forKey: "defaultInputVol")
-            self.muteController.setNewVolume(newValue: val)
-
-        case .leftMouseDragged, .rightMouseDragged:
-            inputValueLabel?.stringValue = String(val)
-
-        default:
-            break
-
-        }
-
-    }
-
-
-    func getCurrentVolume() {
-        // AppleScript's `input volume of (get volume settings)` is unreliable on
-        // Aggregate Devices (often returns a stale 100). Read the actual input
-        // volume via CoreAudio. If muted, report 0 so the slider/UI reflects it.
-        if AudioInputController.isMuted() == true {
-            currentSetVolume = 0
-        } else if let v = AudioInputController.volume() {
-            currentSetVolume = Int((v * 100).rounded())
-        } else {
-            return
-        }
-        defaults.set(currentSetVolume, forKey: "currentSetVolume")
     }
 
 
