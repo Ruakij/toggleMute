@@ -13,6 +13,9 @@ enum AudioInputController {
     static let followDefault = ""
     static let allMicrophones = "*"
 
+    /// Volumes below this count as muted.
+    static let nearZeroVolume: Float32 = 0.05
+
     static func isSpecificDevice(_ selection: String) -> Bool {
         return ![followDefault, allMicrophones].contains(selection)
     }
@@ -21,9 +24,14 @@ enum AudioInputController {
     /// devices that dont fully respect the mute property. Unmuting a device
     /// at volume 0 brings back the last volume it had above zero.
     static func setMuted(_ muted: Bool, zeroVolume: Bool = false) {
+        // A slider write still queued would land after the mute and could
+        // raise a zeroed volume again.
+        queuedVolume = nil
+        volumeQueue.sync {}
         // Muting can zero the volume, so the current one is recorded first. It
         // differs from the recorded one when it changed while the app wasnt running.
         if muted { recordVolumes() }
+        if !muted { lastSeenVolume = nil }
         let targets = targetDeviceIDs()
         // Unmute any targets previously muted, but no longer targeted (e.g. input device changed)
         for deviceID in mutedDeviceIDs where !targets.contains(deviceID) {
@@ -38,6 +46,7 @@ enum AudioInputController {
 
     /// Gives devices at volume 0 their last volume above zero back.
     static func restoreZeroedVolumes() {
+        lastSeenVolume = nil
         for deviceID in targetDeviceIDs() { restoreZeroedVolume(deviceID) }
     }
 
@@ -46,10 +55,56 @@ enum AudioInputController {
         return readMute(deviceID: deviceID)
     }
 
+    /// While `dragging`, the volume unmuting restores is not recorded, so it
+    /// stays the one from before the drag instead of one passed on the way to 0.
+    static func setVolume(_ volume: Float32, dragging: Bool = false) {
+        volumeDragging = dragging
+        queuedVolume = volume
+        if !volumeWriteInFlight { writeQueuedVolume() }
+    }
+
+    // Any HAL call waits until coreaudiod has applied the previous volume
+    // write to the hardware, so writing on main stalls a slider drag. Writes
+    // run one at a time on a queue and skip values a newer one replaced.
+    private static let volumeQueue = DispatchQueue(label: "toggleMute.volume")
+    private static var queuedVolume: Float32?
+    private static var volumeWriteInFlight = false
+    private static var volumeDragging = false
+
+    private static func writeQueuedVolume() {
+        guard let volume = queuedVolume else {
+            volumeWriteInFlight = false
+            syncState()
+            return
+        }
+        queuedVolume = nil
+        volumeWriteInFlight = true
+        volumeQueue.async {
+            for deviceID in targetDeviceIDs() { applyVolume(deviceID: deviceID, volume: volume) }
+            DispatchQueue.main.async(execute: writeQueuedVolume)
+        }
+    }
+
+    static func restoreVolume() -> Float32? {
+        primaryDeviceID().map(restoreVolume)
+    }
+
     /// Returns 0.0 ... 1.0, or nil if no readable volume property is present.
     static func volume() -> Float32? {
         guard let deviceID = primaryDeviceID() else { return nil }
         return readVolume(deviceID: deviceID)
+    }
+
+    /// Whether something other than this app raised the volume from about 0
+    /// since the last call, e.g. a headsets mute button.
+    static func volumeRecoveredExternally() -> Bool {
+        guard let deviceID = primaryDeviceID(), let volume = readVolume(deviceID: deviceID) else {
+            lastSeenVolume = nil
+            return false
+        }
+        let nearZero = volume < nearZeroVolume
+        defer { lastSeenVolume = (deviceID, nearZero) }
+        return lastSeenVolume?.deviceID == deviceID && lastSeenVolume?.nearZero == true && !nearZero
     }
 
     /// The controlled input devices display name (e.g. "MacBook Pro Microphone",
@@ -89,9 +144,16 @@ enum AudioInputController {
         DispatchQueue.main.asyncAfter(deadline: max(.now(), lastStateSync + stateSyncInterval)) {
             stateSyncScheduled = false
             lastStateSync = .now()
-            recordVolumes()
-            onStateChanged?()
+            syncState()
         }
+    }
+
+    private static func syncState() {
+        // Reading now would wait for the write. Its completion syncs.
+        guard !volumeWriteInFlight else { return }
+        guard !volumeDragging else { return }
+        recordVolumes()
+        onStateChanged?()
     }
 
     private static let systemAddresses = [
@@ -278,11 +340,17 @@ enum AudioInputController {
     }
 
     private static func restoreZeroedVolume(_ deviceID: AudioDeviceID) {
-        guard let volume = readVolume(deviceID: deviceID), volume < 0.05 else { return }
+        // A drag owns the volume,restoring would move the slider while the user is dragging it.
+        guard !volumeDragging, let volume = readVolume(deviceID: deviceID), volume < nearZeroVolume else { return }
+        applyVolume(deviceID: deviceID, volume: restoreVolume(deviceID))
+    }
+
+    /// The volume unmuting gives a zeroed device back.
+    private static func restoreVolume(_ deviceID: AudioDeviceID) -> Float32 {
         let last = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
         let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID)
         // 0.8 for devices we havent stored a last volume for yet.
-        applyVolume(deviceID: deviceID, volume: Float32(uid.flatMap { last[$0] } ?? 0.8))
+        return Float32(uid.flatMap { last[$0] } ?? 0.8)
     }
 
     // MARK: - Volume memory
@@ -293,10 +361,21 @@ enum AudioInputController {
     /// unmuting can undo a zeroed volume (by this app, a headsets hardware
     /// mute, or by hand).
     private static func recordVolumes() {
-        var last = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
+        let stored = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
+        var last = stored
         for deviceID in targetDeviceIDs() {
             guard let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID),
-                  let volume = readVolume(deviceID: deviceID), volume >= 0.05 else { continue }
+                  let volume = readVolume(deviceID: deviceID), volume >= nearZeroVolume else { continue }
+            last[uid] = Double(volume)
+        }
+        if last != stored { UserDefaults.standard.set(last, forKey: lastVolumesKey) }
+    }
+
+    /// Sets the volume unmuting restores on every controlled device.
+    static func setRestoreVolume(_ volume: Float32) {
+        var last = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
+        for deviceID in targetDeviceIDs() {
+            guard let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID) else { continue }
             last[uid] = Double(volume)
         }
         UserDefaults.standard.set(last, forKey: lastVolumesKey)
@@ -306,8 +385,9 @@ enum AudioInputController {
         let targets = expandedTargets(deviceID)
         for target in targets {
             if !setMuteProperty(target, muted: muted) {
-                // Fallback when the device exposes no writable mute: drive volume to 0/1.
-                _ = setVolumeProperty(target, volume: muted ? 0 : 1)
+                // Fallback when the device exposes no writable mute: drive the
+                // volume to 0, and back to the last volume above zero.
+                _ = setVolumeProperty(target, volume: muted ? 0 : restoreVolume(deviceID))
             }
         }
     }
@@ -362,7 +442,7 @@ enum AudioInputController {
         // false — not absent — so the fallback below has to run even when
         // mutePropertyResult is a known false, not just when it's nil.
         for target in targets {
-            if let v = readVolumeOnDevice(target), v < 0.05 {
+            if let v = readVolumeOnDevice(target), v < nearZeroVolume {
                 return true
             }
         }
@@ -404,6 +484,11 @@ enum AudioInputController {
             _ = setVolumeProperty(target, volume: clamped)
         }
     }
+
+    /// Primary devices volume as of the last volumeRecoveredExternally().
+    /// Cleared by unmuting so its restored volume never counts as a recovery.
+    /// Drags skip the sync, so the slider never counts either.
+    private static var lastSeenVolume: (deviceID: AudioDeviceID, nearZero: Bool)?
 
     private static func setVolumeProperty(_ deviceID: AudioDeviceID, volume: Float32) -> Bool {
         if writeVolume(deviceID, channel: kAudioObjectPropertyElementMain, volume: volume) {
