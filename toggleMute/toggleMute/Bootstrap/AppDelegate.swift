@@ -5,13 +5,23 @@ import LaunchAtLogin
 import KeyboardShortcuts
 import UserNotifications
 
-@NSApplicationMain
-class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+@main
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSPopoverDelegate {
+
+    static func main() {
+        let delegate = AppDelegate()
+        NSApplication.shared.delegate = delegate
+        withExtendedLifetime(delegate) { NSApplication.shared.run() }
+    }
     
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
     private lazy var preferences = Preferences()
     lazy var muteController = MuteController()
+    /// nil while the popover is closed, so audio changes then update no views.
+    var inputState: InputState? { popoverView.isShown ? mainController?.state : nil }
+    /// Built on the first open and kept, so later opens skip building the views.
+    private var mainController: MainController?
     let repoUrl = URL(string: "https://github.com/satrik/toggleMute")!
     let popoverView = NSPopover()
     var eventMonitor: EventMonitor?
@@ -83,24 +93,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         }
         
-        popoverView.contentViewController = MainController.createController()
         popoverView.setValue(true, forKeyPath: "shouldHideAnchor")
         popoverView.behavior = .transient
+        popoverView.animates = false
+        popoverView.delegate = self
 
-        eventMonitor = EventMonitor(mask: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-          
-            if let strongSelf = self, (strongSelf.popoverView.isShown) {
-                strongSelf.popoverView.performClose((Any).self)
-                strongSelf.eventMonitor?.stop()
-            }
-          
+        // Clicks in other apps, which the transient popover misses while
+        // the app is not active. Clicks inside the app never reach it.
+        eventMonitor = EventMonitor(mask: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.closeMainController()
         }
         
         muteController.configureUI()
 
         AudioInputController.startMonitoring(
             devicesChanged: { [weak self] in self?.inputDevicesChanged() },
-            stateChanged: { [weak self] in self?.syncFromHardware() }
+            stateChanged: { [weak self] in self?.syncFromHardware($0) }
         )
         
         KeyboardShortcuts.onKeyDown(for: .toggleMuteShortcut) {
@@ -128,6 +136,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     func applicationWillTerminate(_ notification: Notification) {
 
         if muteController.isMuted { AudioInputController.setMuted(false) }
+        AudioInputController.saveLastVolumes()
 
     }
 
@@ -223,11 +232,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         notificationCenter.add(request)
         
     }
-    
-    
-    private var mainController: MainController? {
-        popoverView.contentViewController as? MainController
-    }
 
 
     // Mutes newly controlled devices (plugged in, new default input, new
@@ -235,20 +239,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     func inputDevicesChanged() {
 
         muteController.applyMuteStateToDevices()
-        mainController?.updateInputVolume()
+        inputState?.refreshDevices()
 
     }
 
 
-    func syncFromHardware() {
-
-        mainController?.updateInputVolume()
+    func syncFromHardware(_ reading: AudioInputController.Reading) {
 
         // Sync UI to the actual device state so the icon reflects external mute
         // changes (e.g. from the system menu). Reads the real CoreAudio mute
         // property — falls back to "volume == 0" only when no mute property is
         // exposed. If we can't tell, leave the UI alone instead of flipping it.
-        guard let muted = AudioInputController.isMuted() else { return }
+        inputState?.refresh(reading)
+        let known = reading.muted.compactMap { $0 }
+        guard !known.isEmpty else { return }
+        // Every controlled mic matches the app's state unless it was changed
+        // elsewhere (a headset button, a call app). The app follows that.
+        let muted = known.contains(!muteController.isMuted) ? !muteController.isMuted : muteController.isMuted
 
         // Some hardware (many Bluetooth/USB headsets, e.g. Jabra) only has a
         // mute BUTTON that drives input volume — it never touches CoreAudio's
@@ -263,7 +270,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // currently muted is an unambiguous "the hardware just unmuted"
         // signal, so it overrides a stuck property and forces a proper
         // unmute (which clears the property too).
-        let volumeJustRecovered = AudioInputController.volumeRecoveredExternally()
+        let volumeJustRecovered = AudioInputController.volumeRecoveredExternally(reading)
 
         if volumeJustRecovered && muteController.isMuted {
             muteController.toggleMuteStateHard(setMute: false)
@@ -304,9 +311,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     
     @objc private func showMainController() {
-        
-        let mainController = MainController.instantiate(with: preferences)
-        popoverView.contentViewController = mainController
 
         guard let button = statusItem.button else {
             fatalError("Couldn't find status item button.")
@@ -314,19 +318,56 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         if(popoverView.isShown) {
             
-            popoverView.close()
-            eventMonitor?.stop()
+            closeMainController(hide: true)
             
         } else {
             
+            let controller = mainController ?? MainController()
+            if mainController == nil {
+                mainController = controller
+                popoverView.contentViewController = controller
+            }
+            // The state missed every change while the popover was closed.
+            controller.state.refreshDevices()
+            controller.view.layoutSubtreeIfNeeded()
+            popoverView.contentSize = controller.view.fittingSize
+
+            // Key presses reach the shortcut recorder only in the active app.
+            if #available(macOS 14.0, *) {
+                NSApp.activate()
+            } else {
+                NSApp.activate(ignoringOtherApps: true)
+            }
             popoverView.show(relativeTo: button.bounds.offsetBy(dx: 0, dy: -6), of: button, preferredEdge: NSRectEdge.minY)
-            popoverView.contentViewController?.view.window?.becomeKey()
-            
+            controller.view.window?.makeKey()
             eventMonitor?.start()
-            NSApp.activate(ignoringOtherApps: true)
 
         }
 
+    }
+
+
+    private func closeMainController(hide: Bool = false) {
+        guard popoverView.isShown else { return }
+        popoverView.close()
+        eventMonitor?.stop()
+        // Give back focus to the app that was active before the popover opened
+        if hide && NSApp.isActive { NSApp.hide(nil) }
+    }
+
+
+    // A right click on the icon closes the popover on mouse up in
+    // statusBarButtonClicked. Closing it on mouse down already would
+    // reopen it on mouse up.
+    func popoverShouldClose(_ popover: NSPopover) -> Bool {
+        guard let event = NSApp.currentEvent, event.type == .rightMouseDown else { return true }
+        return event.window == nil || event.window != statusItem.button?.window
+    }
+
+
+    // The transient popover also closes on its own.
+    func popoverDidClose(_ notification: Notification) {
+        eventMonitor?.stop()
     }
 
     

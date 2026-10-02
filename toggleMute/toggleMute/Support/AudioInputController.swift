@@ -30,7 +30,7 @@ enum AudioInputController {
         volumeQueue.sync {}
         // Muting can zero the volume, so the current one is recorded first. It
         // differs from the recorded one when it changed while the app wasnt running.
-        if muted { recordVolumes() }
+        if muted { recordVolumes(read()) }
         if !muted { lastSeenVolume = nil }
         let targets = targetDeviceIDs()
         // Unmute any targets previously muted, but no longer targeted (e.g. input device changed)
@@ -50,9 +50,29 @@ enum AudioInputController {
         for deviceID in targetDeviceIDs() { restoreZeroedVolume(deviceID) }
     }
 
-    static func isMuted() -> Bool? {
-        guard let deviceID = primaryDeviceID() else { return nil }
-        return readMute(deviceID: deviceID)
+    /// Mute and volume of each controlled device, read together so that one
+    /// sync asks coreaudiod for each only once.
+    struct Reading {
+        /// The first is the one the slider shows.
+        let deviceIDs: [AudioDeviceID]
+        /// Per device, nil if it can't be told.
+        let muted: [Bool?]
+        let volumes: [Float32?]
+
+        var deviceID: AudioDeviceID? { deviceIDs.first }
+        var volume: Float32? { volumes.first ?? nil }
+    }
+
+    static func read() -> Reading {
+        let deviceIDs = targetDeviceIDs()
+        var muted: [Bool?] = [], volumes: [Float32?] = []
+        for deviceID in deviceIDs {
+            let targets = expandedTargets(deviceID)
+            let targetVolumes = targets.map(readVolumeOnDevice)
+            muted.append(readMute(targets: targets, volumes: targetVolumes))
+            volumes.append(targetVolumes.lazy.compactMap { $0 }.first)
+        }
+        return Reading(deviceIDs: deviceIDs, muted: muted, volumes: volumes)
     }
 
     /// While `dragging`, the volume unmuting restores is not recorded, so it
@@ -85,20 +105,14 @@ enum AudioInputController {
         }
     }
 
-    static func restoreVolume() -> Float32? {
-        primaryDeviceID().map(restoreVolume)
-    }
-
-    /// Returns 0.0 ... 1.0, or nil if no readable volume property is present.
-    static func volume() -> Float32? {
-        guard let deviceID = primaryDeviceID() else { return nil }
-        return readVolume(deviceID: deviceID)
+    static func restoreVolume(_ reading: Reading) -> Float32? {
+        reading.deviceID.map(restoreVolume)
     }
 
     /// Whether something other than this app raised the volume from about 0
     /// since the last call, e.g. a headsets mute button.
-    static func volumeRecoveredExternally() -> Bool {
-        guard let deviceID = primaryDeviceID(), let volume = readVolume(deviceID: deviceID) else {
+    static func volumeRecoveredExternally(_ reading: Reading) -> Bool {
+        guard let deviceID = reading.deviceID, let volume = reading.volume else {
             lastSeenVolume = nil
             return false
         }
@@ -126,7 +140,7 @@ enum AudioInputController {
     // MARK: - Change listeners
 
     private static var onDevicesChanged: (() -> Void)?
-    private static var onStateChanged: (() -> Void)?
+    private static var onStateChanged: ((Reading) -> Void)?
     private static var watchedDeviceIDs: [AudioDeviceID] = []
 
     // Stored once so the identical block can be passed to the remove call.
@@ -138,7 +152,9 @@ enum AudioInputController {
     private static var lastStateSync = DispatchTime(uptimeNanoseconds: 0)
     // One write notifies once per channel and sub-device. One sync covers the burst.
     private static let stateSyncInterval: TimeInterval = 0.25
-    private static let stateListener: AudioObjectPropertyListenerBlock = { _, _ in
+    private static let stateListener: AudioObjectPropertyListenerBlock = { _, _ in scheduleSync() }
+
+    private static func scheduleSync() {
         guard !stateSyncScheduled else { return }
         stateSyncScheduled = true
         DispatchQueue.main.asyncAfter(deadline: max(.now(), lastStateSync + stateSyncInterval)) {
@@ -152,8 +168,9 @@ enum AudioInputController {
         // Reading now would wait for the write. Its completion syncs.
         guard !volumeWriteInFlight else { return }
         guard !volumeDragging else { return }
-        recordVolumes()
-        onStateChanged?()
+        let reading = read()
+        recordVolumes(reading)
+        onStateChanged?(reading)
     }
 
     private static let systemAddresses = [
@@ -170,7 +187,7 @@ enum AudioInputController {
     /// changed (default input switched, device plugged in or removed) and
     /// `stateChanged` when mute or input volume of a controlled device
     /// changes, e.g. from a headsets hardware mute button. Both run on main.
-    static func startMonitoring(devicesChanged: @escaping () -> Void, stateChanged: @escaping () -> Void) {
+    static func startMonitoring(devicesChanged: @escaping () -> Void, stateChanged: @escaping (Reading) -> Void) {
         onDevicesChanged = devicesChanged
         onStateChanged = stateChanged
         for var address in systemAddresses {
@@ -180,7 +197,8 @@ enum AudioInputController {
     }
 
     /// Moves the state listeners to the current target devices. Called on
-    /// device changes and when the device selection changes.
+    /// device changes and when the device selection changes. Syncs after,
+    /// since a newly controlled device can be muted already.
     static func refreshWatchedDevices() {
         for deviceID in watchedDeviceIDs {
             for var address in stateAddresses {
@@ -193,7 +211,7 @@ enum AudioInputController {
                 AudioObjectAddPropertyListenerBlock(deviceID, &address, .main, stateListener)
             }
         }
-        recordVolumes()
+        scheduleSync()
     }
 
     // MARK: - Device lookup
@@ -219,7 +237,10 @@ enum AudioInputController {
         // system audio rather than a microphone.
         if selection == allMicrophones {
             let excluded = [kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeVirtual]
-            return allDeviceIDs().filter { hasInputStream($0) && !excluded.contains(transportType($0)) }
+            let devices = allDeviceIDs().filter { hasInputStream($0) && !excluded.contains(transportType($0)) }
+            // The default input first, so the slider shows the mic in use.
+            let defaultID = defaultInputDeviceID()
+            return devices.filter { $0 == defaultID } + devices.filter { $0 != defaultID }
         }
         return primaryDeviceID().map { [$0] } ?? []
     }
@@ -273,13 +294,27 @@ enum AudioInputController {
         return subs.isEmpty ? [deviceID] : subs.filter(hasInputStream)
     }
 
+    private static func objectClass(_ objectID: AudioObjectID) -> AudioClassID? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyClass,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var classID: AudioClassID = 0
+        var size = UInt32(MemoryLayout<AudioClassID>.size)
+        guard AudioObjectGetPropertyData(objectID, &address, 0, nil, &size, &classID) == noErr else { return nil }
+        return classID
+    }
+
     private static func subDeviceIDs(of aggregate: AudioDeviceID) -> [AudioDeviceID] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioAggregateDevicePropertyActiveSubDeviceList,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        guard AudioObjectHasProperty(aggregate, &address) else { return [] }
+        // The class is known in process. Asking for the sub device list of
+        // a plain device costs a round trip to coreaudiod on every sync.
+        guard objectClass(aggregate) == kAudioAggregateDeviceClassID else { return [] }
         var size: UInt32 = 0
         guard AudioObjectGetPropertyDataSize(aggregate, &address, 0, nil, &size) == noErr,
               size > 0 else { return [] }
@@ -347,38 +382,50 @@ enum AudioInputController {
 
     /// The volume unmuting gives a zeroed device back.
     private static func restoreVolume(_ deviceID: AudioDeviceID) -> Float32 {
-        let last = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
         let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID)
         // 0.8 for devices we havent stored a last volume for yet.
-        return Float32(uid.flatMap { last[$0] } ?? 0.8)
+        return Float32(uid.flatMap { lastVolumes[$0] } ?? 0.8)
     }
 
     // MARK: - Volume memory
 
     private static let lastVolumesKey = "lastVolumes"
 
+    /// The last volume above zero of each device by UID. Stored a second
+    /// after the first change, since a call apps gain control changes it many
+    /// times a second.
+    private static var lastVolumes = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:] {
+        didSet {
+            guard lastVolumes != oldValue, !lastVolumesSaveScheduled else { return }
+            lastVolumesSaveScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: saveLastVolumes)
+        }
+    }
+    private static var lastVolumesSaveScheduled = false
+
+    /// Stores a pending change right away. Called on quit.
+    static func saveLastVolumes() {
+        lastVolumesSaveScheduled = false
+        UserDefaults.standard.set(lastVolumes, forKey: lastVolumesKey)
+    }
+
     /// Keeps the last volume above zero of each controlled device, so that
     /// unmuting can undo a zeroed volume (by this app, a headsets hardware
     /// mute, or by hand).
-    private static func recordVolumes() {
-        let stored = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
-        var last = stored
-        for deviceID in targetDeviceIDs() {
-            guard let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID),
-                  let volume = readVolume(deviceID: deviceID), volume >= nearZeroVolume else { continue }
-            last[uid] = Double(volume)
+    private static func recordVolumes(_ reading: Reading) {
+        for (deviceID, volume) in zip(reading.deviceIDs, reading.volumes) {
+            guard let volume = volume, volume >= nearZeroVolume,
+                  let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID) else { continue }
+            lastVolumes[uid] = Double(volume)
         }
-        if last != stored { UserDefaults.standard.set(last, forKey: lastVolumesKey) }
     }
 
     /// Sets the volume unmuting restores on every controlled device.
     static func setRestoreVolume(_ volume: Float32) {
-        var last = UserDefaults.standard.dictionary(forKey: lastVolumesKey) as? [String: Double] ?? [:]
         for deviceID in targetDeviceIDs() {
             guard let uid = readString(deviceID, selector: kAudioDevicePropertyDeviceUID) else { continue }
-            last[uid] = Double(volume)
+            lastVolumes[uid] = Double(volume)
         }
-        UserDefaults.standard.set(last, forKey: lastVolumesKey)
     }
 
     private static func applyMute(deviceID: AudioDeviceID, muted: Bool) {
@@ -420,9 +467,8 @@ enum AudioInputController {
         return AudioObjectSetPropertyData(deviceID, &address, 0, nil, size, &value) == noErr
     }
 
-    private static func readMute(deviceID: AudioDeviceID) -> Bool? {
-        let targets = expandedTargets(deviceID)
-
+    /// `volumes` are the targets volumes, already read by the caller.
+    private static func readMute(targets: [AudioDeviceID], volumes: [Float32?]) -> Bool? {
         var mutePropertyResult: Bool?
         for target in targets {
             if let m = readMuteOnDevice(target) {
@@ -441,10 +487,8 @@ enum AudioInputController {
         // can therefore leave the mute property reporting a definite
         // false — not absent — so the fallback below has to run even when
         // mutePropertyResult is a known false, not just when it's nil.
-        for target in targets {
-            if let v = readVolumeOnDevice(target), v < nearZeroVolume {
-                return true
-            }
+        if volumes.contains(where: { $0.map { $0 < nearZeroVolume } ?? false }) {
+            return true
         }
 
         return mutePropertyResult
@@ -466,7 +510,6 @@ enum AudioInputController {
             mScope: kAudioDevicePropertyScopeInput,
             mElement: channel
         )
-        guard AudioObjectHasProperty(deviceID, &address) else { return nil }
         var value: UInt32 = 0
         var size = UInt32(MemoryLayout<UInt32>.size)
         guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value) == noErr else {
@@ -542,7 +585,6 @@ enum AudioInputController {
             mScope: kAudioDevicePropertyScopeInput,
             mElement: channel
         )
-        guard AudioObjectHasProperty(deviceID, &address) else { return nil }
         var value: Float32 = 0
         var size = UInt32(MemoryLayout<Float32>.size)
         guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value) == noErr else {
@@ -559,7 +601,6 @@ enum AudioInputController {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        guard AudioObjectHasProperty(deviceID, &address) else { return nil }
         // CFString properties hand back an already-retained CFStringRef.
         // A plain `var name: CFString` target doesn't reliably line up with
         // what CoreAudio writes into that memory (Swift's CFString bridging
