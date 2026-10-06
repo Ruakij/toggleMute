@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ad-hoc signing ("-") needs no Apple account; Apple Silicon refuses to
+      # run completely unsigned binaries.
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project toggleMute/toggleMute.xcodeproj \
+            -scheme toggleMute \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO
+
+      # ditto keeps the bundle's symlinks and signature intact, unlike zip.
+      - name: Package
+        run: |
+          ditto -c -k --keepParent build/Build/Products/Release/toggleMute.app toggleMute.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: toggleMute
+          path: |
+            toggleMute.zip
+            toggleMuteDisableQuarantine.command
